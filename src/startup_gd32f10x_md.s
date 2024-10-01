@@ -6,16 +6,15 @@
 .global g_pfnVectors
 .global Default_Handler
 
-/* start address for the initialization values of the .data section.
-defined in linker script */
+// 初始化数据在flash的起始位置
 .word _sidata
-/* start address for the .data section. defined in linker script */
+// 初始化数据在ram的起始位置
 .word _sdata
-/* end address for the .data section. defined in linker script */
+// 初始化数据在ram的结束位置
 .word _edata
-/* start address for the .bss section. defined in linker script */
+// 未初始化数据(填充0)在ram的起始位置
 .word _sbss
-/* end address for the .bss section. defined in linker script */
+// 未初始化数据(填充0)在ram的结束位置
 .word _ebss
 
   .section .text.Reset_Handler
@@ -27,6 +26,7 @@ Reset_Handler:
 /* Call the clock system initialization function.*/
   bl  SystemInit
 
+// 牛皮，加载段还要自己写
 /* Copy the data segment initializers from flash to SRAM */
   ldr r0, =_sdata
   ldr r1, =_edata
@@ -62,6 +62,7 @@ LoopFillZerobss:
   bl __libc_init_array
 /* Call the application's entry point.*/
   bl main
+  b .
 
   .section .isr_vector,"a",%progbits
   .type g_pfnVectors, %object
@@ -136,7 +137,6 @@ g_pfnVectors:
     .word EXMC_IRQHandler            // 64:EXMC
   .size g_pfnVectors, .-g_pfnVectors
 
-// 不是哥们，其他中断写是吧
 .type NMI_Handler, %function
 NMI_Handler:
     .weak NMI_Handler

@@ -1,4 +1,7 @@
-/* linker_script.ld */
+ENTRY(Reset_Handler)
+
+_Min_Heap_Size = 0x200; /* required amount of heap */
+_Min_Stack_Size = 0x400; /* required amount of stack */
 
 MEMORY
 {
@@ -10,36 +13,77 @@ MEMORY
 /* 定义段 */
 SECTIONS
 {
-    /* 启动代码段 */
+    /* 代码 */
     .text : {
         KEEP(*(.isr_vector))   /* 保留中断向量表 */
         *(.text*)               /* 所有代码 */
-        _etext = .;             /* 代码段结束位置 */
     } > FLASH
 
-    /* 初始化数据段 */
+    /* flash里的只读数据 */
     .rodata : { 
         *(.rodata*)             /* 只读数据 */
     } > FLASH
 
     _sidata = LOADADDR(.data);
-    /* 数据段 */
+    /* 已初始化的数据 */
     .data : {
         _sdata = .;             /* 数据段开始位置 */
         *(.data*)               /* 所有初始化过的数据 */
         _edata = .;             /* 数据段结束位置 */
     } > RAM AT> FLASH
 
-    /* BSS 段（未初始化数据） */
+    /* 未初始化数据 */
     .bss : {
         _sbss = .;              /* BSS 段开始位置 */
         *(.bss*)                /* 所有未初始化的数据 */
         _ebss = .;              /* BSS 段结束位置 */
     } > RAM
 
-    /* 堆栈 */
+    /* C++ 初始化段 */
+    .preinit_array     :
+    {
+        . = ALIGN(4);
+        PROVIDE_HIDDEN (__preinit_array_start = .);
+        KEEP (*(.preinit_array*))
+        PROVIDE_HIDDEN (__preinit_array_end = .);
+        . = ALIGN(4);
+    } >FLASH
+
+    .init_array :
+    {
+        . = ALIGN(4);
+        PROVIDE_HIDDEN (__init_array_start = .);
+        KEEP (*(SORT(.init_array.*)))
+        KEEP (*(.init_array*))
+        PROVIDE_HIDDEN (__init_array_end = .);
+        . = ALIGN(4);
+    } >FLASH
+
+    .fini_array :
+    {
+        . = ALIGN(4);
+        PROVIDE_HIDDEN (__fini_array_start = .);
+        KEEP (*(SORT(.fini_array.*)))
+        KEEP (*(.fini_array*))
+        PROVIDE_HIDDEN (__fini_array_end = .);
+        . = ALIGN(4);
+    } >FLASH
+
+    /* 栈 */
     .stack (NOLOAD) : {
         _estack = ORIGIN(RAM) + LENGTH(RAM); /* 堆栈结束位置 */
-        . = . + 0x400; /* 分配 1KB 堆栈空间 */
+        . = . + _Min_Stack_Size;
     } > RAM
+
+    /* 堆 */
+    .heap (NOLOAD) : {
+        . = ALIGN(8);
+        ._heap_start = .;
+        PROVIDE ( end = . );
+        PROVIDE ( _end = . );
+        . = . + _Min_Heap_Size;
+        . = . + _Min_Stack_Size;
+        ._heap_end = .;
+        . = ALIGN(8);
+    } >RAM
 }

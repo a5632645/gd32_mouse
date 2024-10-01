@@ -10,10 +10,9 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/build/bin)
 
 set(LINKER_SCRIPT ${PROJECT_SOURCE_DIR}/src/ld.ld)
 
-# 设置链接器选项，仅对 my_executable 有效
 target_link_options(mouse.elf PRIVATE
     # "--specs=nano.specs"
-    # "-specs=nosys.specs"
+    "-specs=nosys.specs"
     "-T${LINKER_SCRIPT}"
     "-Wl,-Map=${PROJECT_BINARY_DIR}/${PRJ_NAME}.map,--cref"
     "-Wl,--gc-sections"
@@ -22,11 +21,12 @@ target_compile_options(mouse.elf PRIVATE
     "-mcpu=cortex-m3"
     "-mthumb"
     "-mno-thumb-interwork"
-    "-mfpu=vfp"
-    "-msoft-float"
+    # "-mfpu=vfp"
+    # "-msoft-float"
     "-mfix-cortex-m3-ldrd"
     # "--specs=nano.specs"
-    # "-specs=nosys.specs"
+    "-specs=nosys.specs"
+    "-fno-exceptions" # 不使用异常，就不用管arm异常两个段了(
 )
 
 SET(ELF_FILE ${PROJECT_SOURCE_DIR}/build/bin/${PRJ_NAME}.elf)
