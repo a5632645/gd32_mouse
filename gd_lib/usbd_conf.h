@@ -32,7 +32,8 @@
 
 #define HID_IN_EP                          EP_IN(1)
 
-#define HID_IN_PACKET                      8
+#define HID_IN_PACKET                      4
+
 
 /* base address of the allocation buffer, used for buffer descriptor table and packet memory */
 #define BTABLE_OFFSET                      (0x0000)
