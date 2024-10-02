@@ -11,24 +11,19 @@
 #define SystemCoreClock (96*1000*1000U)
 #define SYSTICK_HZ (1000U)
 #define MS_TO_TICK(ms) ((ms) * (SystemCoreClock / SYSTICK_HZ))
-#define TICK_TO_MS(tick) ((tick) * (SYSTICK_HZ / SystemCoreClock))
 volatile uint32_t gTick = 0;
 static void Systick_Init(void);
 
 // --------------------------------------------------------------------------------
-static void UartTask(MyTimerParamStruct* ctx) {
+static void UartTask(uint32_t escape, void* userdata) {
     printf("UartTask\n");
 }
 
 // --------------------------------------------------------------------------------
 MyTimerStruct task = {
-    .node = {
-        .prev = NULL,
-        .next = NULL,
-    },
-    .period = MS_TO_TICK(100),
+    .period = 100,
     .callback = UartTask,
-    .context = NULL,
+    .userdata = NULL,
 };
 
 int main(void) {
@@ -38,11 +33,11 @@ int main(void) {
     MouseButton_Init();
     MouseEncoder_Init();
 
-    MyTimer_Reset(&task);
+    MyTimer_Reset(&task, sizeof(task) / sizeof(MyTimerStruct));
     for (;;) {
         uint32_t t = gTick;
         gTick = 0;
-        MyTimer_Tick(&task, t);
+        MyTimer_Tick(&task, sizeof(task) / sizeof(MyTimerStruct), t);
     }
 }
 
