@@ -3,6 +3,14 @@
         "gd32f10x.h": "c",
         "standard_hid_core.h": "c",
         "usbd_enum.h": "c",
-        "usb_hid.h": "c"
+        "usb_hid.h": "c",
+        "gd32f10x_rcu.h": "c",
+        "stdint.h": "c",
+        "gd32f10x_timer.h": "c",
+        "gd32f10x_gpio.h": "c",
+        "mouse_usb.h": "c",
+        "mouse_fop_handler.h": "c",
+        "stdbool.h": "c",
+        "mouse_hw.h": "c"
     }
 }

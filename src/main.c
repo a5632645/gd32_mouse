@@ -1,26 +1,57 @@
-#include "mouse_usb.h"
 #include "mouse_fop_handler.h"
+#include "mouse_button.h"
+#include "mouse_encoder.h"
+#include "paw3205.h"
+#include "uart_printf.h"
+#include "my_timer.h"
+#include <stdio.h>
 
-usb_dev usb_hid;
+// --------------------------------------------------------------------------------
+// extern uint32_t SystemCoreClock;
+#define SystemCoreClock (96*1000*1000U)
+#define SYSTICK_HZ (1000U)
+#define MS_TO_TICK(ms) ((ms) * (SystemCoreClock / SYSTICK_HZ))
+#define TICK_TO_MS(tick) ((tick) * (SYSTICK_HZ / SystemCoreClock))
+volatile uint32_t gTick = 0;
+static void Systick_Init(void);
 
-static void ClockConfig(void);
-static void GpioConfig(void);
-static void NvicConfig(void);
+// --------------------------------------------------------------------------------
+static void UartTask(MyTimerParamStruct* ctx) {
+    printf("UartTask\n");
+}
+
+// --------------------------------------------------------------------------------
+MyTimerStruct task = {
+    .node = {
+        .prev = NULL,
+        .next = NULL,
+    },
+    .period = MS_TO_TICK(100),
+    .callback = UartTask,
+    .context = NULL,
+};
 
 int main(void) {
-    ClockConfig();
-    GpioConfig();
+    UartPrintf_Init();
+    Paw3205_Init();
+    MouseUsb_Init();
+    MouseButton_Init();
+    MouseEncoder_Init();
 
-    hid_itfop_register(&usb_hid, &gMouseFopHandler);
-    usbd_init(&usb_hid, &hid_desc, &hid_class);
-
-    NvicConfig();
-    usbd_connect(&usb_hid);
-
-    while(usb_hid.cur_status != USBD_CONFIGURED) {
+    MyTimer_Reset(&task);
+    for (;;) {
+        uint32_t t = gTick;
+        gTick = 0;
+        MyTimer_Tick(&task, t);
     }
+}
 
-    while (1) {
-        gMouseFopHandler.hid_itf_data_process(&usb_hid);
-    }
+// --------------------------------------------------------------------------------
+static void Systick_Init(void) {
+    SysTick_Config(MS_TO_TICK(SYSTICK_HZ));
+    nvic_irq_enable(SysTick_IRQn, 0, 0);
+}
+
+void SysTick_Handler(void) {
+    ++gTick;
 }

@@ -1,5 +1,4 @@
 #include "gd32f10x_it.h"
-#include "systick.h"
 #include "usbd_lld_int.h"
 
 void NMI_Handler(void)
@@ -46,10 +45,9 @@ void PendSV_Handler(void)
 {
 }
 
-void SysTick_Handler(void)
-{
-    delay_decrement();
-}
+// void SysTick_Handler(void)
+// {
+// }
 
 // 外设中断
 void USBD_LP_CAN0_RX0_IRQHandler(void) {
