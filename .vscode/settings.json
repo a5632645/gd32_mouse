@@ -11,6 +11,7 @@
         "mouse_usb.h": "c",
         "mouse_fop_handler.h": "c",
         "stdbool.h": "c",
-        "mouse_hw.h": "c"
+        "mouse_hw.h": "c",
+        "stddef.h": "c"
     }
 }

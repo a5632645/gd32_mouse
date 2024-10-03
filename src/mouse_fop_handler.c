@@ -1,5 +1,6 @@
 #include "mouse_fop_handler.h"
 #include "mouse_usb.h"
+#include <string.h>
 
 usb_dev usb_hid;
 MoudeReportStruct* gMouseReport;
@@ -50,4 +51,9 @@ uint8_t MouseUsb_IsReady(void) {
 void MouseUsb_Send() {
     gMouseReport->bits.reserve = 0;
     hid_report_send(&usb_hid, (uint8_t*)gMouseReport, HID_IN_PACKET);
+}
+
+void MouseUsb_ResetReport(void) {
+    memset(gMouseReport, 0, sizeof(MoudeReportStruct));
+    gMouseReport->bits.reserve = 1;
 }

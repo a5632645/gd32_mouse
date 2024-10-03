@@ -1,6 +1,10 @@
 #pragma once
 #include <stdint.h>
 
+/**
+ * @brief 
+ * @param period 不要设为0，否则会死循环
+ */
 typedef struct __MyTimerStruct {
     uint32_t tickLeft;
     uint32_t period;

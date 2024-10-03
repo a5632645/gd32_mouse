@@ -21,4 +21,5 @@ extern MoudeReportStruct* gMouseReport;
 
 void MouseUsb_Init(void);
 void MouseUsb_Send();
+void MouseUsb_ResetReport(void);
 uint8_t MouseUsb_IsReady(void);
