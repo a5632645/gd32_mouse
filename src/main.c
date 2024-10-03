@@ -25,6 +25,9 @@ static void UartTimer(uint32_t escape, void* userdata) {
 
 static MotionStruct gMotionStruct;
 static void Paw3205Timer(uint32_t escape, void* userdata) {
+    if (!Paw3205_HasMotion())
+        return;
+    
     Paw3205_GetMotion(&gMotionStruct);
     gMouseReport->dx = MY_ABS(gMotionStruct.dx);
     gMouseReport->dy = MY_ABS(gMotionStruct.dy);
@@ -115,7 +118,13 @@ static void HwTimer(uint32_t escape, void* userdata) {
     }
 
     int32_t dWheel = MouseEncoder_Read(eMouseEncoder_Wheel);
-    gMouseReport->wheel = MY_CLAMP(dWheel, INT8_MIN, INT8_MAX);
+    // gMouseReport->wheel = MY_CLAMP(dWheel, INT8_MIN, INT8_MAX);
+    if (dWheel > 0)
+        gMouseReport->wheel = 0xff;
+    else if (dWheel < 0)
+        gMouseReport->wheel = 0x00;
+    else
+        gMouseReport->wheel = 0x80;
 
     if (autoclickPress) {
         if (gButtonState.left == eButton_Click) {

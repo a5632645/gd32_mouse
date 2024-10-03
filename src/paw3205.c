@@ -4,6 +4,7 @@
 #define SENSOR_GPIO GPIOB
 #define SCLK_PIN GPIO_PIN_8
 #define SDIO_PIN GPIO_PIN_9
+#define MOTION_PIN GPIO_PIN_0
 
 typedef enum {
     ePAW3205_ProductID0 = 0x00,
@@ -34,7 +35,9 @@ static void Paw3205Init(void) {
     rcu_periph_clock_enable(RCU_GPIOB);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SCLK_PIN);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SDIO_PIN);
-    Paw3205Sync();
+    gpio_init(SENSOR_GPIO, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, MOTION_PIN);
+
+    Paw3205_TrySync();
 
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x5a);	//Unlock WP
     Paw3205WriteReg(0x28, 0xb4);
@@ -94,6 +97,7 @@ static uint8_t Paw3205Read(void) {
         }
         gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
     }
+    gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
     return data;
 }
 
@@ -124,14 +128,11 @@ static void Paw3205Sync(void) {
     DELAY_US(1700);
 }
 
-static uint16_t gProductId;
 // --------------------------------------------------------------------------------
 // public
 // --------------------------------------------------------------------------------
 void Paw3205_Init(void) {
     Paw3205Init();
-    // 读取产品ID
-    gProductId = (Paw3205ReadReg(ePAW3205_ProductID0) << 8) | Paw3205ReadReg(ePAW3205_ProductID1);
 }
 
 void Paw3205_GetMotion(MotionStruct* motion) {
@@ -142,13 +143,46 @@ void Paw3205_GetMotion(MotionStruct* motion) {
 
 bool Paw3205_TrySync(void) {
     uint32_t trys = 16;
-    uint16_t id = (Paw3205ReadReg(ePAW3205_ProductID0) << 8) | Paw3205ReadReg(ePAW3205_ProductID1);
+    uint16_t id = Paw3205ReadReg(ePAW3205_ProductID0);
+    if (id == 0x30) {
+        return TRUE;
+    }
+
     while (trys--) {
         Paw3205Sync();
-        id = (Paw3205ReadReg(ePAW3205_ProductID0) << 8) | Paw3205ReadReg(ePAW3205_ProductID1);
-        if (id == gProductId) {
+        id = Paw3205ReadReg(ePAW3205_ProductID0);
+        if (id == 0x30) {
             return TRUE;
         }
     }
     return FALSE;
+}
+
+typedef struct {
+    uint8_t cpi : 3;
+    uint8_t powerDown : 1;
+    uint8_t zero : 2;
+    uint8_t motswk : 1;
+    uint8_t reset : 1;
+}Paw3205ConfigRegStruct;
+void Paw3205_ResetChip(void) {
+    Paw3205WriteReg(ePaw3205_WriteProtect, 0x5a);	//Unlock WP3
+    uint8_t val = Paw3205ReadReg(ePaw3205_Config);
+    ((Paw3205ConfigRegStruct*)&val)->reset = 1;
+    Paw3205WriteReg(ePaw3205_Config, val);
+    Paw3205WriteReg(ePaw3205_WriteProtect, 0x00);	//Lock WP
+}
+
+bool Paw3205_HasMotion(void) {
+    if (gpio_input_bit_get(SENSOR_GPIO, MOTION_PIN) == RESET)
+        return TRUE;
+    return FALSE;
+}
+
+void Paw3205_SetCPI(Paw3205CPIEnum cpi) {
+    Paw3205WriteReg(ePaw3205_WriteProtect, 0x5a);	//Unlock WP3
+    uint8_t val = Paw3205ReadReg(ePaw3205_Config);
+    ((Paw3205ConfigRegStruct*)&val)->cpi = cpi;
+    Paw3205WriteReg(ePaw3205_Config, val);
+    Paw3205WriteReg(ePaw3205_WriteProtect, 0x00);	//Lock WP
 }

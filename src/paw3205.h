@@ -26,3 +26,6 @@ typedef struct {
 void Paw3205_Init(void);
 void Paw3205_GetMotion(MotionStruct* motion);
 bool Paw3205_TrySync(void);
+void Paw3205_ResetChip(void);
+bool Paw3205_HasMotion(void);
+void Paw3205_SetCPI(Paw3205CPIEnum cpi);
