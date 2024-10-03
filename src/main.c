@@ -212,7 +212,7 @@ MyTimerStruct tasks[] = {
     {
         .period = 10,
         .callback = HwTimer,
-        .userdata = tasks + 4,
+        .userdata = &tasks[4],
     },
     {
         .period = 1,
