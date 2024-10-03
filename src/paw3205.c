@@ -124,15 +124,31 @@ static void Paw3205Sync(void) {
     DELAY_US(1700);
 }
 
+static uint16_t gProductId;
 // --------------------------------------------------------------------------------
 // public
 // --------------------------------------------------------------------------------
 void Paw3205_Init(void) {
     Paw3205Init();
+    // 读取产品ID
+    gProductId = (Paw3205ReadReg(ePAW3205_ProductID0) << 8) | Paw3205ReadReg(ePAW3205_ProductID1);
 }
 
 void Paw3205_GetMotion(MotionStruct* motion) {
     motion->dx = Paw3205ReadReg(ePaw3205_DeltaX);
     motion->dy = Paw3205ReadReg(ePaw3205_DeltaY);
     *(uint8_t*)&motion->motionStatus = Paw3205ReadReg(ePaw3205_Motion);
+}
+
+bool Paw3205_TrySync(void) {
+    uint32_t trys = 16;
+    uint16_t id = (Paw3205ReadReg(ePAW3205_ProductID0) << 8) | Paw3205ReadReg(ePAW3205_ProductID1);
+    while (trys--) {
+        Paw3205Sync();
+        id = (Paw3205ReadReg(ePAW3205_ProductID0) << 8) | Paw3205ReadReg(ePAW3205_ProductID1);
+        if (id == gProductId) {
+            return TRUE;
+        }
+    }
+    return FALSE;
 }

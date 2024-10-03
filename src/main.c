@@ -34,6 +34,10 @@ static void Paw3205Timer(uint32_t escape, void* userdata) {
     gMouseReport->bits.dyOverflow = gMotionStruct.motionStatus.dyOverflow;
 }
 
+static void Paw3205SyncTimer(uint32_t escape, void* userdata) {
+    Paw3205_TrySync();
+}
+
 // --------------------------------------------------------------------------------
 // hw task
 // --------------------------------------------------------------------------------
@@ -224,6 +228,11 @@ MyTimerStruct tasks[] = {
         .callback = AutoClickTimer,
         .userdata = NULL,
     },
+    {
+        .period = 1000,
+        .callback = Paw3205SyncTimer,
+        .userdata = NULL
+    }
 };
 
 int main(void) {

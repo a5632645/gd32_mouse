@@ -25,3 +25,4 @@ typedef struct {
 
 void Paw3205_Init(void);
 void Paw3205_GetMotion(MotionStruct* motion);
+bool Paw3205_TrySync(void);
