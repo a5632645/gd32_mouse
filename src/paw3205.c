@@ -31,16 +31,16 @@ static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data);
 static uint8_t Paw3205ReadReg(Paw3205AddressEnum address);
 static void Paw3205Sync(void);
 
-#define __CLOCK_HZ (96*1000*1000)
-#define __DELAY_TICKS(us) ((us) * __CLOCK_HZ / 1000000)
+#define __CLOCK_HZ (96ULL*1000ULL*1000ULL)
+#define __DELAY_TICKS(us) ((us) * __CLOCK_HZ / 1000000ULL)
 #define DELAY_US(us) do { \
-    uint32_t ticks = __DELAY_TICKS(us) >> 1; \
+    uint32_t ticks = __DELAY_TICKS(us) >> 1U; \
     while (ticks--); \
 } while (0)
 #define DELAY_MS(ms) do { \
-    uint32_t t = ms; \
+    uint32_t t = ms << 3U; \
     while (t--) \
-        DELAY_US(1000); \
+        DELAY_US(125U); \
 } while (0)
 
 static void Paw3205Init(void) {
@@ -163,18 +163,18 @@ void Paw3205_GetMotion(MotionStruct* motion) {
     *(uint8_t*)&motion->motionStatus = Paw3205ReadReg(ePaw3205_Motion);
 }
 
-bool Paw3205_TrySync(void) {
+uint8_t Paw3205_TrySync(void) {
     uint32_t trys = 16;
     uint16_t id = Paw3205ReadReg(ePAW3205_ProductID0);
     if (id == 0x30) {
-        return TRUE;
+        return 1;
     }
 
     while (trys--) {
         Paw3205Sync();
         id = Paw3205ReadReg(ePAW3205_ProductID0);
         if (id == 0x30) {
-            return TRUE;
+            return 0;
         }
     }
     return FALSE;
@@ -195,10 +195,10 @@ void Paw3205_ResetChip(void) {
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x00);	//Lock WP
 }
 
-bool Paw3205_HasMotion(void) {
+uint8_t Paw3205_HasMotion(void) {
     if (gpio_input_bit_get(SENSOR_GPIO, MOTION_PIN) == RESET)
-        return TRUE;
-    return FALSE;
+        return 1;
+    return 0;
 }
 
 void Paw3205_SetCPI(Paw3205CPIEnum cpi) {
