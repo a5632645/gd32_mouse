@@ -17,9 +17,8 @@ typedef struct {
     uint8_t dy;
     int8_t wheel; 
 } MoudeReportStruct;
-extern MoudeReportStruct* gMouseReport;
 
 void MouseUsb_Init(void);
-void MouseUsb_Send();
-void MouseUsb_ResetReport(void);
+void MouseUsb_Send(MoudeReportStruct* report);
+void MouseUsb_ResetReport(MoudeReportStruct* report);
 uint8_t MouseUsb_IsReady(void);

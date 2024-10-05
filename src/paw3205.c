@@ -27,9 +27,21 @@ typedef enum {
 static void Paw3205Init(void);
 static void Paw3205Write(uint8_t data);
 static uint8_t Paw3205Read(void);
-static void Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data);
+static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data);
 static uint8_t Paw3205ReadReg(Paw3205AddressEnum address);
 static void Paw3205Sync(void);
+
+#define __CLOCK_HZ (96*1000*1000)
+#define __DELAY_TICKS(us) ((us) * __CLOCK_HZ / 1000000)
+#define DELAY_US(us) do { \
+    uint32_t ticks = __DELAY_TICKS(us) >> 1; \
+    while (ticks--); \
+} while (0)
+#define DELAY_MS(ms) do { \
+    uint32_t t = ms; \
+    while (t--) \
+        DELAY_US(1000); \
+} while (0)
 
 static void Paw3205Init(void) {
     rcu_periph_clock_enable(RCU_GPIOB);
@@ -37,7 +49,10 @@ static void Paw3205Init(void) {
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SDIO_PIN);
     gpio_init(SENSOR_GPIO, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, MOTION_PIN);
 
+    DELAY_MS(50);
     Paw3205_TrySync();
+    Paw3205_ResetChip();
+    DELAY_MS(5);
 
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x5a);	//Unlock WP
     Paw3205WriteReg(0x28, 0xb4);
@@ -72,6 +87,9 @@ static void Paw3205Init(void) {
     Paw3205Write(0x00);
 
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x00);	//Lock WP
+
+    for (uint8_t addr = 0x2; addr < 0x7; addr++)
+        Paw3205ReadReg(addr);
 }
 
 static void Paw3205Write(uint8_t data) {
@@ -101,24 +119,27 @@ static uint8_t Paw3205Read(void) {
     return data;
 }
 
-#define __CLOCK_HZ (96*1000*1000)
-#define __DELAY_TICKS(us) ((us) / 1000000 * __CLOCK_HZ)
-#define DELAY_US(us) do { \
-    uint32_t ticks = __DELAY_TICKS(us) >> 1; \
-    while (ticks--); \
-} while (0)
-
-static void Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data) {
+static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data) {
+    uint32_t tries = 16;
     do {
         Paw3205Write(0x80 | address);
         Paw3205Write(data);
-    } while (Paw3205ReadReg(address) == data);
+    } while (Paw3205ReadReg(address) == data && (tries--));
+
+    if (tries == 0) {
+        return FALSE;
+    }
+    else {
+        return TRUE;
+    }
 }
 
 static uint8_t Paw3205ReadReg(Paw3205AddressEnum address) {
     Paw3205Write(0x7f & address);
     DELAY_US(3);
-    return Paw3205Read();
+    uint8_t data = Paw3205Read();
+    DELAY_US(1);
+    return data;
 }
 
 static void Paw3205Sync(void) {
@@ -136,6 +157,7 @@ void Paw3205_Init(void) {
 }
 
 void Paw3205_GetMotion(MotionStruct* motion) {
+    Paw3205_TrySync();
     motion->dx = Paw3205ReadReg(ePaw3205_DeltaX);
     motion->dy = Paw3205ReadReg(ePaw3205_DeltaY);
     *(uint8_t*)&motion->motionStatus = Paw3205ReadReg(ePaw3205_Motion);

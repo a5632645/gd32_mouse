@@ -3,7 +3,6 @@
 #include <string.h>
 
 usb_dev usb_hid;
-MoudeReportStruct* gMouseReport;
 
 static void HidItfConfig(void);
 static void HidItfDataProcess(usb_dev* udev);
@@ -15,7 +14,6 @@ hid_fop_handler gMouseFopHandler = {
 
 static void HidItfConfig(void) {
     standard_hid_handler *hid = (standard_hid_handler*)usb_hid.class_data[USBD_HID_INTERFACE];
-    gMouseReport = (MoudeReportStruct*)hid->data;
 }
 
 static void HidItfDataProcess(usb_dev* udev) {
@@ -48,12 +46,12 @@ uint8_t MouseUsb_IsReady(void) {
     return hid->prev_transfer_complete == 1;
 }
 
-void MouseUsb_Send() {
-    gMouseReport->bits.reserve = 0;
-    hid_report_send(&usb_hid, (uint8_t*)gMouseReport, HID_IN_PACKET);
+void MouseUsb_Send(MoudeReportStruct* report) {
+    report->bits.reserve = 1;
+    hid_report_send(&usb_hid, (uint8_t*)report, HID_IN_PACKET);
 }
 
-void MouseUsb_ResetReport(void) {
-    memset(gMouseReport, 0, sizeof(MoudeReportStruct));
-    gMouseReport->bits.reserve = 1;
+void MouseUsb_ResetReport(MoudeReportStruct* report) {
+    memset(report, 0, sizeof(MoudeReportStruct));
+    report->bits.reserve = 1;
 }

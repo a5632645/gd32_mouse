@@ -7,16 +7,46 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// --------------------------------------------------------------------------------
-// debug task
-// --------------------------------------------------------------------------------
+// ---------------------------------------- debug ----------------------------------------
 static void UartTimer(uint32_t escape, void* userdata) {
     printf("UartTask\n");
 }
 
-// --------------------------------------------------------------------------------
-// paw3205 task
-// --------------------------------------------------------------------------------
+// ---------------------------------------- 按键联合 ----------------------------------------
+typedef struct {
+    uint8_t autoclick_press : 1;
+    uint8_t normal_press : 1;
+    uint8_t autopress_press : 1;
+} UnionButtonState;
+
+uint8_t UnionButtonState_IsPressed(UnionButtonState* state) {
+    if (state->autoclick_press) {
+        return 1;
+    }
+    if (state->normal_press) {
+        return 1;
+    }
+    return state->autoclick_press;
+}
+
+static UnionButtonState gLeftBtnState = {};
+static UnionButtonState gRightBtnState = {};
+static UnionButtonState gCenterBtnState = {};
+
+// ---------------------------------------- usb ----------------------------------------
+static MoudeReportStruct gMouseReport = {};
+static void UsbTimer(uint32_t escape, void* userdata) {
+    if (!MouseUsb_IsReady()) {
+        return;
+    }
+    gMouseReport.bits.left = UnionButtonState_IsPressed(&gLeftBtnState);
+    gMouseReport.bits.right = UnionButtonState_IsPressed(&gRightBtnState);
+    gMouseReport.bits.center = UnionButtonState_IsPressed(&gCenterBtnState);
+    MouseUsb_Send(&gMouseReport);
+    MouseUsb_ResetReport(&gMouseReport);
+}
+
+// ---------------------------------------- paw3205 ----------------------------------------
 #define MY_ABS(x) ((x) < 0 ? -(x) : (x))
 #define MY_SIGNBIT(x) ((x) < 0 ? 1 : 0)
 #define MY_MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -29,21 +59,19 @@ static void Paw3205Timer(uint32_t escape, void* userdata) {
         return;
     
     Paw3205_GetMotion(&gMotionStruct);
-    gMouseReport->dx = MY_ABS(gMotionStruct.dx);
-    gMouseReport->dy = MY_ABS(gMotionStruct.dy);
-    gMouseReport->bits.dxSign = MY_SIGNBIT(gMotionStruct.motionStatus.dxOverflow);
-    gMouseReport->bits.dySign = MY_SIGNBIT(gMotionStruct.motionStatus.dyOverflow);
-    gMouseReport->bits.dxOverflow = gMotionStruct.motionStatus.dxOverflow;
-    gMouseReport->bits.dyOverflow = gMotionStruct.motionStatus.dyOverflow;
+    gMouseReport.dx = MY_ABS(gMotionStruct.dx);
+    gMouseReport.dy = MY_ABS(gMotionStruct.dy);
+    gMouseReport.bits.dxSign = MY_SIGNBIT(gMotionStruct.motionStatus.dxOverflow);
+    gMouseReport.bits.dySign = MY_SIGNBIT(gMotionStruct.motionStatus.dyOverflow);
+    gMouseReport.bits.dxOverflow = gMotionStruct.motionStatus.dxOverflow;
+    gMouseReport.bits.dyOverflow = gMotionStruct.motionStatus.dyOverflow;
 }
 
-static void Paw3205SyncTimer(uint32_t escape, void* userdata) {
-    Paw3205_TrySync();
-}
+// static void Paw3205SyncTimer(uint32_t escape, void* userdata) {
+//     Paw3205_TrySync();
+// }
 
-// --------------------------------------------------------------------------------
-// hw task
-// --------------------------------------------------------------------------------
+// ---------------------------------------- 硬件 ----------------------------------------
 struct {
     uint8_t autoclickLeft : 1;
     uint8_t autoclickRight : 1;
@@ -107,25 +135,33 @@ static void HwTimer(uint32_t escape, void* userdata) {
     ButtonStateTick(&gButtonState.right, rightPress);
     ButtonStateTick(&gButtonState.center, centerPress);
 
-    if (centerPress) {
-        gMouseReport->bits.center = 1;
+    // 普通赋值
+    gLeftBtnState.normal_press = leftPress;
+    gRightBtnState.normal_press = rightPress;
+    gCenterBtnState.normal_press = centerPress;
+
+    // 如果按键弹起，清除自动按下
+    if (gButtonState.left == eButton_Release) {
+        gAutoParams.autopressLeft = 0;
     }
-    if (leftPress) {
-        gMouseReport->bits.left = 1;
+    if (gButtonState.right == eButton_Release) {
+        gAutoParams.autopressRight = 0;
     }
-    if (rightPress) {
-        gMouseReport->bits.right = 1;
+    if (gButtonState.center == eButton_Release) {
+        gAutoParams.autopressCenter = 0;
     }
 
+    // 计算鼠标轮
     int32_t dWheel = MouseEncoder_Read(eMouseEncoder_Wheel);
     // gMouseReport->wheel = MY_CLAMP(dWheel, INT8_MIN, INT8_MAX);
     if (dWheel > 0)
-        gMouseReport->wheel = 0xff;
+        gMouseReport.wheel = 0xff;
     else if (dWheel < 0)
-        gMouseReport->wheel = 0x00;
+        gMouseReport.wheel = 0x00;
     else
-        gMouseReport->wheel = 0x80;
+        gMouseReport.wheel = 0x80;
 
+    // 自动点击开关
     if (autoclickPress) {
         if (gButtonState.left == eButton_Click) {
             gAutoParams.autoclickLeft = !gAutoParams.autoclickLeft;
@@ -137,15 +173,20 @@ static void HwTimer(uint32_t escape, void* userdata) {
             gAutoParams.autoclickCenter = !gAutoParams.autoclickCenter;
         }
     }
+
+    // 自动按下开关
     if (autopressPress) {
         if (gButtonState.left == eButton_Click) {
             gAutoParams.autopressLeft = !gAutoParams.autopressLeft;
+            gLeftBtnState.autopress_press = gAutoParams.autopressLeft;
         }
         if (gButtonState.right == eButton_Click) {
             gAutoParams.autopressRight = !gAutoParams.autopressRight;
+            gRightBtnState.autopress_press = gAutoParams.autopressRight;
         }
         if (gButtonState.center == eButton_Click) {
             gAutoParams.autopressCenter = !gAutoParams.autopressCenter;
+            gCenterBtnState.autopress_press = gAutoParams.autopressCenter;
         }
     }
 
@@ -156,31 +197,7 @@ static void HwTimer(uint32_t escape, void* userdata) {
     autoclickTask->period = gAutoParams.autoclickRate;
 }
 
-// --------------------------------------------------------------------------------
-// usb task
-// --------------------------------------------------------------------------------
-static void UsbTimer(uint32_t escape, void* userdata) {
-    if (!MouseUsb_IsReady())
-        return;
-
-    // autopress强制覆盖
-    if (gAutoParams.autoclickLeft) {
-        gMouseReport->bits.left = 1;
-    }
-    if (gAutoParams.autoclickRight) {
-        gMouseReport->bits.right = 1;
-    }
-    if (gAutoParams.autoclickCenter) {
-        gMouseReport->bits.center = 1;
-    }
-
-    MouseUsb_Send();
-    MouseUsb_ResetReport();
-}
-
-// --------------------------------------------------------------------------------
-// auto click timer
-// --------------------------------------------------------------------------------
+// ---------------------------------------- 自动点击 ----------------------------------------
 struct {
     uint8_t left : 1;
     uint8_t right : 1;
@@ -189,15 +206,15 @@ struct {
 static void AutoClickTimer(uint32_t escape, void* userdata) {
     if (gAutoParams.autoclickLeft) {
         gAutoClickState.left = !gAutoClickState.left;
-        gMouseReport->bits.left = gAutoClickState.left;
+        gLeftBtnState.autoclick_press = gAutoClickState.left;
     }
     if (gAutoParams.autoclickRight) {
         gAutoClickState.right = !gAutoClickState.right;
-        gMouseReport->bits.right = gAutoClickState.right;
+        gRightBtnState.autoclick_press = gAutoClickState.right;
     }
     if (gAutoParams.autoclickCenter) {
         gAutoClickState.center = !gAutoClickState.center;
-        gMouseReport->bits.center = gAutoClickState.center;
+        gCenterBtnState.autoclick_press = gAutoClickState.center;
     }
 }
 
@@ -218,7 +235,7 @@ MyTimerStruct tasks[] = {
         .userdata = NULL,
     },
     {
-        .period = 10,
+        .period = 5,
         .callback = Paw3205Timer,
         .userdata = NULL,
     },
@@ -237,11 +254,11 @@ MyTimerStruct tasks[] = {
         .callback = AutoClickTimer,
         .userdata = NULL,
     },
-    {
-        .period = 1000,
-        .callback = Paw3205SyncTimer,
-        .userdata = NULL
-    }
+    // {
+    //     .period = 100,
+    //     .callback = Paw3205SyncTimer,
+    //     .userdata = NULL
+    // }
 };
 
 int main(void) {
