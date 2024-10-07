@@ -48,6 +48,8 @@ static void Paw3205Init(void) {
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SCLK_PIN);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SDIO_PIN);
     gpio_init(SENSOR_GPIO, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, MOTION_PIN);
+    gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
+    gpio_bit_set(SENSOR_GPIO, SDIO_PIN);
 
     DELAY_MS(50);
     Paw3205_TrySync();
@@ -92,7 +94,15 @@ static void Paw3205Init(void) {
         Paw3205ReadReg(addr);
 }
 
+typedef struct {
+    uint32_t : 4;
+    uint32_t md : 2;
+    uint32_t ctrl : 2;
+    uint32_t : 24;
+} GpioCtrlStruct;
 static void Paw3205Write(uint8_t data) {
+    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->md = 0b11;
+    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->ctrl = 0b00;
     for (int i = 0; i < 8; i++) {
         gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
         if (data & 0x80) {
@@ -106,16 +116,17 @@ static void Paw3205Write(uint8_t data) {
 }
 
 static uint8_t Paw3205Read(void) {
+    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->md = 0b00;
+    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->ctrl = 0b01;
     uint8_t data = 0;
     for (int i = 0; i < 8; i++) {
         gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
-        data <<= 1;
-        if (gpio_input_bit_get(SENSOR_GPIO, SDIO_PIN)) {
+        gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
+        if (SET == gpio_input_bit_get(SENSOR_GPIO, SDIO_PIN)) {
             data |= 0x01;
         }
-        gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
+        data <<= 1;
     }
-    gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
     return data;
 }
 

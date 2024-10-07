@@ -3,11 +3,20 @@
 #include "gd32f10x_gpio.h"
 #include "gd32f10x_rcu.h"
 
-#define WHEEL_ENCODER TIMER3
+#define WHEEL_ENCODER TIMER1
 #define CLICK_RATE_ENCODER TIMER2
 
+typedef struct {
+    uint32_t : 2;
+    uint32_t : 2;
+    uint32_t ch0Filt : 4;
+    uint32_t : 2;
+    uint32_t : 2;
+    uint32_t ch1Filt : 4;
+} TimerChCfg1Struct;
+
 void MouseEncoder_Init(void) {
-    rcu_periph_clock_enable(RCU_TIMER3);
+    rcu_periph_clock_enable(RCU_TIMER1);
     rcu_periph_clock_enable(RCU_TIMER2);
 
     timer_deinit(WHEEL_ENCODER);
@@ -33,12 +42,18 @@ void MouseEncoder_Init(void) {
     timer_counter_value_config(WHEEL_ENCODER, 32768);
     timer_counter_value_config(CLICK_RATE_ENCODER, 32768);
 
+    // ic滤波
+    ((volatile TimerChCfg1Struct*)WHEEL_ENCODER)->ch0Filt = 0b0011;
+    ((volatile TimerChCfg1Struct*)WHEEL_ENCODER)->ch1Filt = 0b0011;
+    ((volatile TimerChCfg1Struct*)CLICK_RATE_ENCODER)->ch0Filt = 0b0011;
+    ((volatile TimerChCfg1Struct*)CLICK_RATE_ENCODER)->ch1Filt = 0b0011;
+
     rcu_periph_clock_enable(RCU_GPIOA);
-    rcu_periph_clock_enable(RCU_GPIOB);
-    gpio_init(GPIOA, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, GPIO_PIN_6);
-    gpio_init(GPIOA, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, GPIO_PIN_7);
-    gpio_init(GPIOB, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, GPIO_PIN_5);
-    gpio_init(GPIOB, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, GPIO_PIN_6);
+    rcu_periph_clock_enable(RCU_AF);
+    gpio_init(GPIOA, GPIO_MODE_IPU, GPIO_OSPEED_50MHZ, GPIO_PIN_6);
+    gpio_init(GPIOA, GPIO_MODE_IPU, GPIO_OSPEED_50MHZ, GPIO_PIN_7);
+    gpio_init(GPIOA, GPIO_MODE_IPU, GPIO_OSPEED_50MHZ, GPIO_PIN_0);
+    gpio_init(GPIOA, GPIO_MODE_IPU, GPIO_OSPEED_50MHZ, GPIO_PIN_1);
 
     timer_enable(WHEEL_ENCODER);
     timer_enable(CLICK_RATE_ENCODER);

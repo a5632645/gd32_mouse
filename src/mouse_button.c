@@ -4,7 +4,7 @@
 #include "mouse_button.h"
 
 #define MOUSE_LEFT_GPIO GPIOA
-#define MOUSE_LEFT_PIN  GPIO_PIN_0
+#define MOUSE_LEFT_PIN  GPIO_PIN_5
 
 #define MOUSE_RIGHT_GPIO GPIOB
 #define MOUSE_RIGHT_PIN  GPIO_PIN_5
@@ -29,8 +29,23 @@ void MouseButton_Init(void) {
     gpio_init(AUTO_PRESS_GPIO, GPIO_MODE_IPU, GPIO_OSPEED_50MHZ, AUTO_PRESS_PIN);
 }
 
+#define FILTER_COUNT (4U)
 static uint8_t IsButtonPress(uint32_t gpio, uint32_t pin) {
-    return gpio_input_bit_get(gpio, pin) == RESET ? 1 : 0;
+    uint8_t filter = 0;
+    for (uint32_t i = 0; i < FILTER_COUNT; ++i) {
+        if (RESET == gpio_input_port_get(gpio)) {
+            filter |= 1U;
+        }
+        else {
+            filter &= ~1U;
+        }
+    }
+    if (filter == ((1U << 4U) - 1U)) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 uint8_t MouseButton_IsPressed(MouseButtonEnum button) {

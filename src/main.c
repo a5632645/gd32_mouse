@@ -1,11 +1,12 @@
+#include <stdlib.h>
+#include <stdio.h>
 #include "mouse_fop_handler.h"
 #include "mouse_button.h"
 #include "mouse_encoder.h"
 #include "paw3205.h"
 #include "uart_printf.h"
 #include "my_timer.h"
-#include <stdio.h>
-#include <stdlib.h>
+#include "leds.h"
 
 // ---------------------------------------- debug ----------------------------------------
 static void UartTimer(uint32_t escape, void* userdata) {
@@ -95,7 +96,7 @@ struct {
     ButtonStateEnum right;
     ButtonStateEnum center;
 }gButtonState = {};
-__STATIC_INLINE void ButtonStateTick(ButtonStateEnum* state, uint8_t press) {
+static void ButtonStateTick(ButtonStateEnum* state, uint8_t press) {
     switch (*state) {
     case eButton_Idel:
         if (press)
@@ -140,15 +141,19 @@ static void HwTimer(uint32_t escape, void* userdata) {
     gRightBtnState.normal_press = rightPress;
     gCenterBtnState.normal_press = centerPress;
 
+    bool ledUpdate = FALSE;
     // 如果按键弹起，清除自动按下
     if (gButtonState.left == eButton_Release) {
         gAutoParams.autopressLeft = 0;
+        ledUpdate = TRUE;
     }
     if (gButtonState.right == eButton_Release) {
         gAutoParams.autopressRight = 0;
+        ledUpdate = TRUE;
     }
     if (gButtonState.center == eButton_Release) {
         gAutoParams.autopressCenter = 0;
+        ledUpdate = TRUE;
     }
 
     // 计算鼠标轮
@@ -165,12 +170,15 @@ static void HwTimer(uint32_t escape, void* userdata) {
     if (autoclickPress) {
         if (gButtonState.left == eButton_Click) {
             gAutoParams.autoclickLeft = !gAutoParams.autoclickLeft;
+            ledUpdate = TRUE;
         }
         if (gButtonState.right == eButton_Click) {
             gAutoParams.autoclickRight = !gAutoParams.autoclickRight;
+            ledUpdate = TRUE;
         }
         if (gButtonState.center == eButton_Click) {
             gAutoParams.autoclickCenter = !gAutoParams.autoclickCenter;
+            ledUpdate = TRUE;
         }
     }
 
@@ -179,15 +187,29 @@ static void HwTimer(uint32_t escape, void* userdata) {
         if (gButtonState.left == eButton_Click) {
             gAutoParams.autopressLeft = !gAutoParams.autopressLeft;
             gLeftBtnState.autopress_press = gAutoParams.autopressLeft;
+            ledUpdate = TRUE;
         }
         if (gButtonState.right == eButton_Click) {
             gAutoParams.autopressRight = !gAutoParams.autopressRight;
             gRightBtnState.autopress_press = gAutoParams.autopressRight;
+            ledUpdate = TRUE;
         }
         if (gButtonState.center == eButton_Click) {
             gAutoParams.autopressCenter = !gAutoParams.autopressCenter;
             gCenterBtnState.autopress_press = gAutoParams.autopressCenter;
+            ledUpdate = TRUE;
         }
+    }
+
+    // leds
+    if (TRUE == ledUpdate) {
+        Leds_Set(eLed_APL, gAutoParams.autopressLeft);
+        Leds_Set(eLed_APR, gAutoParams.autopressRight);
+        Leds_Set(eLed_APC, gAutoParams.autopressCenter);
+        Leds_Set(eLed_ACL, gAutoParams.autoclickLeft);
+        Leds_Set(eLed_ACR, gAutoParams.autoclickRight);
+        Leds_Set(eLed_ACC, gAutoParams.autoclickCenter);
+        Led_Update();
     }
 
     MyTimerStruct* autoclickTask = (MyTimerStruct*)userdata;
@@ -267,6 +289,7 @@ int main(void) {
     MouseUsb_Init();
     MouseButton_Init();
     MouseEncoder_Init();
+    Leds_Init();
 
     MyTimer_Reset(tasks, sizeof(tasks) / sizeof(MyTimerStruct));
     for (;;) {
