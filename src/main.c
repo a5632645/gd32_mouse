@@ -5,8 +5,9 @@
 #include "mouse_encoder.h"
 #include "paw3205.h"
 #include "uart_printf.h"
-#include "my_timer.h"
 #include "leds.h"
+#include "util/my_timer.h"
+#include "util/my_button.h"
 
 // ---------------------------------------- debug ----------------------------------------
 static void UartTimer(uint32_t escape, void* userdata) {
@@ -16,23 +17,29 @@ static void UartTimer(uint32_t escape, void* userdata) {
 // ---------------------------------------- 按键联合 ----------------------------------------
 typedef struct {
     uint8_t autoclick_press : 1;
+    uint8_t autoclickEnable : 1;
     uint8_t normal_press : 1;
     uint8_t autopress_press : 1;
-} UnionButtonState;
+} ButtonMixStruct;
 
-uint8_t UnionButtonState_IsPressed(UnionButtonState* state) {
+uint8_t ButtonMix_IsPressed(ButtonMixStruct* state) {
     if (state->autoclick_press) {
         return 1;
     }
     if (state->normal_press) {
         return 1;
     }
-    return state->autoclick_press;
+    if (state->autoclickEnable) {
+        return state->autoclick_press;
+    }
+    else {
+        return state->normal_press;
+    }
 }
 
-static UnionButtonState gLeftBtnState = {};
-static UnionButtonState gRightBtnState = {};
-static UnionButtonState gCenterBtnState = {};
+static ButtonMixStruct gLeftBtnMix = {};
+static ButtonMixStruct gRightBtnMix = {};
+static ButtonMixStruct gCenterBtnMix = {};
 
 // ---------------------------------------- usb ----------------------------------------
 static MoudeReportStruct gMouseReport = {};
@@ -40,9 +47,9 @@ static void UsbTimer(uint32_t escape, void* userdata) {
     if (!MouseUsb_IsReady()) {
         return;
     }
-    gMouseReport.bits.left = UnionButtonState_IsPressed(&gLeftBtnState);
-    gMouseReport.bits.right = UnionButtonState_IsPressed(&gRightBtnState);
-    gMouseReport.bits.center = UnionButtonState_IsPressed(&gCenterBtnState);
+    gMouseReport.bits.left = ButtonMix_IsPressed(&gLeftBtnMix);
+    gMouseReport.bits.right = ButtonMix_IsPressed(&gRightBtnMix);
+    gMouseReport.bits.center = ButtonMix_IsPressed(&gCenterBtnMix);
     MouseUsb_Send(&gMouseReport);
     MouseUsb_ResetReport(&gMouseReport);
 }
@@ -50,9 +57,6 @@ static void UsbTimer(uint32_t escape, void* userdata) {
 // ---------------------------------------- paw3205 ----------------------------------------
 #define MY_ABS(x) ((x) < 0 ? -(x) : (x))
 #define MY_SIGNBIT(x) ((x) < 0 ? 1 : 0)
-#define MY_MIN(x, y) ((x) < (y) ? (x) : (y))
-#define MY_MAX(x, y) ((x) > (y) ? (x) : (y))
-#define MY_CLAMP(x, min, max) MY_MAX(MY_MIN(x, max), min) 
 
 static MotionStruct gMotionStruct;
 static void Paw3205Timer(uint32_t escape, void* userdata) {
@@ -68,12 +72,8 @@ static void Paw3205Timer(uint32_t escape, void* userdata) {
     gMouseReport.bits.dyOverflow = gMotionStruct.motionStatus.dyOverflow;
 }
 
-// static void Paw3205SyncTimer(uint32_t escape, void* userdata) {
-//     Paw3205_TrySync();
-// }
-
 // ---------------------------------------- 硬件 ----------------------------------------
-struct {
+static struct {
     uint8_t autoclickLeft : 1;
     uint8_t autoclickRight : 1;
     uint8_t autoclickCenter : 1;
@@ -81,47 +81,15 @@ struct {
     uint8_t autopressRight : 1;
     uint8_t autopressCenter : 1;
     int32_t autoclickRate;
-}gAutoParams = {};
+} gAutoParams = {};
 
-typedef enum {
-    eButton_Idel = 0,
-    eButton_Click = 1,
-    eButton_Press = 2,
-    eButton_Release = 3
-}ButtonStateEnum;
-struct {
-    ButtonStateEnum autoclick;
-    ButtonStateEnum autopress;
-    ButtonStateEnum left;
-    ButtonStateEnum right;
-    ButtonStateEnum center;
-}gButtonState = {};
-static void ButtonStateTick(ButtonStateEnum* state, uint8_t press) {
-    switch (*state) {
-    case eButton_Idel:
-        if (press)
-            *state = eButton_Click;
-        break;
-    case eButton_Click:
-        if (press)
-            *state = eButton_Press;
-        else
-            *state = eButton_Release;
-        break;
-    case eButton_Press:
-        if (!press)
-            *state = eButton_Release;
-        break;
-    case eButton_Release:
-        if (press)
-            *state = eButton_Click;
-        else
-            *state = eButton_Idel;
-        break;
-    default:
-        break;
-    }
-}
+static struct {
+    MyButtonStruct autoclick;
+    MyButtonStruct autopress;
+    MyButtonStruct left;
+    MyButtonStruct right;
+    MyButtonStruct center;
+} gButtonState = {};
 
 static void HwTimer(uint32_t escape, void* userdata) {
     uint8_t leftPress = MouseButton_IsPressed(eMouseButtonLeft);
@@ -130,35 +98,34 @@ static void HwTimer(uint32_t escape, void* userdata) {
     uint8_t autoclickPress = MouseButton_IsPressed(eMouseButtonAutoClick);
     uint8_t autopressPress = MouseButton_IsPressed(eMouseButtonAutoPress);
 
-    ButtonStateTick(&gButtonState.autoclick, autoclickPress);
-    ButtonStateTick(&gButtonState.autopress, autopressPress);
-    ButtonStateTick(&gButtonState.left, leftPress);
-    ButtonStateTick(&gButtonState.right, rightPress);
-    ButtonStateTick(&gButtonState.center, centerPress);
+    MyButton_Tick(&gButtonState.autoclick, autoclickPress, escape);
+    MyButton_Tick(&gButtonState.autopress, autopressPress, escape);
+    MyButton_Tick(&gButtonState.left, leftPress, escape);
+    MyButton_Tick(&gButtonState.right, rightPress, escape);
+    MyButton_Tick(&gButtonState.center, centerPress, escape);
 
     // 普通赋值
-    gLeftBtnState.normal_press = leftPress;
-    gRightBtnState.normal_press = rightPress;
-    gCenterBtnState.normal_press = centerPress;
+    gLeftBtnMix.normal_press = leftPress;
+    gRightBtnMix.normal_press = rightPress;
+    gCenterBtnMix.normal_press = centerPress;
 
     bool ledUpdate = FALSE;
     // 如果按键弹起，清除自动按下
-    if (gButtonState.left == eButton_Release) {
+    if (gButtonState.left.state == eButtonState_Release) {
         gAutoParams.autopressLeft = 0;
         ledUpdate = TRUE;
     }
-    if (gButtonState.right == eButton_Release) {
+    if (gButtonState.right.state == eButtonState_Release) {
         gAutoParams.autopressRight = 0;
         ledUpdate = TRUE;
     }
-    if (gButtonState.center == eButton_Release) {
+    if (gButtonState.center.state == eButtonState_Release) {
         gAutoParams.autopressCenter = 0;
         ledUpdate = TRUE;
     }
 
     // 计算鼠标轮
     int32_t dWheel = MouseEncoder_Read(eMouseEncoder_Wheel);
-    // gMouseReport->wheel = MY_CLAMP(dWheel, INT8_MIN, INT8_MAX);
     if (dWheel > 0)
         gMouseReport.wheel = 0xff;
     else if (dWheel < 0)
@@ -168,35 +135,38 @@ static void HwTimer(uint32_t escape, void* userdata) {
 
     // 自动点击开关
     if (autoclickPress) {
-        if (gButtonState.left == eButton_Click) {
+        if (gButtonState.left.state == eButtonState_Click) {
             gAutoParams.autoclickLeft = !gAutoParams.autoclickLeft;
+            gLeftBtnMix.autoclickEnable = gAutoParams.autoclickLeft;
             ledUpdate = TRUE;
         }
-        if (gButtonState.right == eButton_Click) {
+        if (gButtonState.right.state == eButtonState_Click) {
             gAutoParams.autoclickRight = !gAutoParams.autoclickRight;
+            gRightBtnMix.autoclickEnable = gAutoParams.autoclickRight;
             ledUpdate = TRUE;
         }
-        if (gButtonState.center == eButton_Click) {
+        if (gButtonState.center.state == eButtonState_Click) {
             gAutoParams.autoclickCenter = !gAutoParams.autoclickCenter;
+            gCenterBtnMix.autoclickEnable = gAutoParams.autoclickCenter;
             ledUpdate = TRUE;
         }
     }
 
     // 自动按下开关
     if (autopressPress) {
-        if (gButtonState.left == eButton_Click) {
+        if (gButtonState.left.state == eButtonState_Click) {
             gAutoParams.autopressLeft = !gAutoParams.autopressLeft;
-            gLeftBtnState.autopress_press = gAutoParams.autopressLeft;
+            gLeftBtnMix.autopress_press = gAutoParams.autopressLeft;
             ledUpdate = TRUE;
         }
-        if (gButtonState.right == eButton_Click) {
+        if (gButtonState.right.state == eButtonState_Click) {
             gAutoParams.autopressRight = !gAutoParams.autopressRight;
-            gRightBtnState.autopress_press = gAutoParams.autopressRight;
+            gRightBtnMix.autopress_press = gAutoParams.autopressRight;
             ledUpdate = TRUE;
         }
-        if (gButtonState.center == eButton_Click) {
+        if (gButtonState.center.state == eButtonState_Click) {
             gAutoParams.autopressCenter = !gAutoParams.autopressCenter;
-            gCenterBtnState.autopress_press = gAutoParams.autopressCenter;
+            gCenterBtnMix.autopress_press = gAutoParams.autopressCenter;
             ledUpdate = TRUE;
         }
     }
@@ -220,23 +190,23 @@ static void HwTimer(uint32_t escape, void* userdata) {
 }
 
 // ---------------------------------------- 自动点击 ----------------------------------------
-struct {
+static struct {
     uint8_t left : 1;
     uint8_t right : 1;
     uint8_t center : 1;
-}gAutoClickState;
+} gAutoClickState = {};
 static void AutoClickTimer(uint32_t escape, void* userdata) {
     if (gAutoParams.autoclickLeft) {
         gAutoClickState.left = !gAutoClickState.left;
-        gLeftBtnState.autoclick_press = gAutoClickState.left;
+        gLeftBtnMix.autoclick_press = gAutoClickState.left;
     }
     if (gAutoParams.autoclickRight) {
         gAutoClickState.right = !gAutoClickState.right;
-        gRightBtnState.autoclick_press = gAutoClickState.right;
+        gRightBtnMix.autoclick_press = gAutoClickState.right;
     }
     if (gAutoParams.autoclickCenter) {
         gAutoClickState.center = !gAutoClickState.center;
-        gCenterBtnState.autoclick_press = gAutoClickState.center;
+        gCenterBtnMix.autoclick_press = gAutoClickState.center;
     }
 }
 
@@ -276,14 +246,10 @@ MyTimerStruct tasks[] = {
         .callback = AutoClickTimer,
         .userdata = NULL,
     },
-    // {
-    //     .period = 100,
-    //     .callback = Paw3205SyncTimer,
-    //     .userdata = NULL
-    // }
 };
 
 int main(void) {
+    Systick_Init();
     UartPrintf_Init();
     Paw3205_Init();
     MouseUsb_Init();
@@ -303,7 +269,7 @@ int main(void) {
 // isr
 // --------------------------------------------------------------------------------
 static void Systick_Init(void) {
-    SysTick_Config(MS_TO_TICK(SYSTICK_HZ));
+    SysTick_Config(MS_TO_TICK(1));
     nvic_irq_enable(SysTick_IRQn, 0, 0);
 }
 
