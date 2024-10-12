@@ -1,5 +1,6 @@
 #include "paw3205.h"
 #include "gd32f10x_gpio.h"
+#include "delay.h"
 
 #define SENSOR_GPIO GPIOB
 #define SCLK_PIN GPIO_PIN_8
@@ -31,19 +32,9 @@ static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data);
 static uint8_t Paw3205ReadReg(Paw3205AddressEnum address);
 static void Paw3205Sync(void);
 
-#define __CLOCK_HZ (96ULL*1000ULL*1000ULL)
-#define __DELAY_TICKS(us) ((us) * __CLOCK_HZ / 1000000ULL)
-#define DELAY_US(us) do { \
-    uint32_t ticks = __DELAY_TICKS(us) >> 1U; \
-    while (ticks--); \
-} while (0)
-#define DELAY_MS(ms) do { \
-    uint32_t t = ms << 3U; \
-    while (t--) \
-        DELAY_US(125U); \
-} while (0)
-
 static void Paw3205Init(void) {
+    Delay_Init();
+
     rcu_periph_clock_enable(RCU_GPIOB);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SCLK_PIN);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SDIO_PIN);
@@ -51,10 +42,10 @@ static void Paw3205Init(void) {
     gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
     gpio_bit_set(SENSOR_GPIO, SDIO_PIN);
 
-    DELAY_MS(50);
+    Delay_Ms(50);
     Paw3205_TrySync();
     Paw3205_ResetChip();
-    DELAY_MS(5);
+    Delay_Ms(5);
 
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x5a);	//Unlock WP
     Paw3205WriteReg(0x28, 0xb4);
@@ -147,17 +138,17 @@ static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data) {
 
 static uint8_t Paw3205ReadReg(Paw3205AddressEnum address) {
     Paw3205Write(0x7f & address);
-    DELAY_US(3);
+    Delay_Us(3);
     uint8_t data = Paw3205Read();
-    DELAY_US(1);
+    Delay_Us(1);
     return data;
 }
 
 static void Paw3205Sync(void) {
     gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
-    DELAY_US(1);
+    Delay_Us(1);
     gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
-    DELAY_US(1700);
+    Delay_Us(1700);
 }
 
 // --------------------------------------------------------------------------------

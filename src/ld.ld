@@ -24,6 +24,20 @@ SECTIONS
         *(.rodata*)             /* 只读数据 */
     } > FLASH
 
+    .ARM.extab   : {
+        . = ALIGN(4);
+        *(.ARM.extab* .gnu.linkonce.armextab.*)
+        . = ALIGN(4);
+    } >FLASH
+
+    .ARM : {
+        . = ALIGN(4);
+        __exidx_start = .;
+        *(.ARM.exidx*)
+        __exidx_end = .;
+        . = ALIGN(4);
+    } >FLASH
+
     _sidata = LOADADDR(.data);
     /* 已初始化的数据 */
     .data : {
@@ -86,4 +100,12 @@ SECTIONS
         ._heap_end = .;
         . = ALIGN(8);
     } >RAM
+
+    /* Remove information from the compiler libraries */
+    /DISCARD/ :
+    {
+        libc.a ( * )
+        libm.a ( * )
+        libgcc.a ( * )
+    }
 }

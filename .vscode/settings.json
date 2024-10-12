@@ -12,6 +12,8 @@
         "mouse_fop_handler.h": "c",
         "stdbool.h": "c",
         "mouse_hw.h": "c",
-        "stddef.h": "c"
+        "stddef.h": "c",
+        "leds.h": "c",
+        "uart_printf.h": "c"
     }
 }

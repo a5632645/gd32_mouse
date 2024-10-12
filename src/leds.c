@@ -58,17 +58,28 @@ void Leds_Set(LedEnum led, uint8_t state) {
 }
 
 void Led_Update(void) {
-    uint8_t d = *(uint8_t *)&sLed;
+    Led_Send(*(uint8_t *)&sLed);
+}
+
+void Led_Send(uint8_t code) {
     gpio_bit_reset(LED_RCK_GPIO, LED_RCK_PIN);
     for (uint8_t i = 0; i < 8; ++i) {
         gpio_bit_reset(LED_SCK_GPIO, LED_SCK_PIN);
-        if (d & 0x01) {
+        if (code & 0x01) {
             gpio_bit_set(LED_SERIAL_GPIO, LED_SERIAL_PIN);
         } else {
             gpio_bit_reset(LED_SERIAL_GPIO, LED_SERIAL_PIN);
         }
-        d >>= 1;
+        code >>= 1;
         gpio_bit_set(LED_SCK_GPIO, LED_SCK_PIN);
     }
     gpio_bit_set(LED_RCK_GPIO, LED_RCK_PIN);
+}
+
+void Led_SimpleTest(uint8_t* state) {
+    if (*state == 0) {
+        *state = 1;
+    }
+    Led_Send(*state);
+    *state <<= 1;
 }

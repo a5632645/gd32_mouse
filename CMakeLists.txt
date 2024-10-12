@@ -10,7 +10,7 @@ SET(CMAKE_C_FLAGS_RELEASE "-O3")
 #Debug 模式
 SET(CMAKE_BUILD_TYPE "Debug")
 #Release 模式
-#SET(CMAKE_BUILD_TYPE "Release")
+# SET(CMAKE_BUILD_TYPE "Release")
 
 # -----------------------------------------------------------------------------
 # 系统调用
@@ -30,7 +30,13 @@ add_compile_options(
     "-mfix-cortex-m3-ldrd"
     "-Wno-unknown-pragmas"
     ${SYS_CALL}
-    "-fno-exceptions" # 不使用异常，就不用管arm异常两个段了(
+    "-fno-exceptions"
+    "-Wimplicit-function-declaration"
+    "-Werror"
+)
+add_link_options(
+    "-mcpu=cortex-m3"
+    "-mthumb"
 )
 
 # -----------------------------------------------------------------------------

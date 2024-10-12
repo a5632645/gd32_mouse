@@ -13,3 +13,5 @@ typedef enum {
 void Leds_Init(void);
 void Leds_Set(LedEnum led, uint8_t state);
 void Led_Update(void);
+void Led_Send(uint8_t code);
+void Led_SimpleTest(uint8_t* state);

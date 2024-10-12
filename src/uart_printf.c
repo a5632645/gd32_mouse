@@ -33,6 +33,51 @@ void UartPrintf_Init(void) {
     usart_enable(USART0);
 }
 
+void UartPrintf_Puts(const char* str) {
+    while (*str != 0) {
+        usart_data_transmit(USART0, *str++);
+        while(RESET == usart_flag_get(USART0, USART_FLAG_TBE));
+    }
+}
+
+void UartPrintf_PrintNum(uint32_t num, uint8_t newline) {
+    char buff[32] = {
+        [31] = 0,
+        [30] = '\n'
+    };
+    char* end = buff + 31;
+    if (newline) {
+        end = buff + 30;
+    }
+
+    do {
+        *--end = (num % 10) + '0';
+        num /= 10;
+    } while (num);
+
+    UartPrintf_Puts(end);
+}
+
+void UartPrintf_PrintHex(uint32_t num, uint8_t newline) {
+    char buff[32] = {
+        [31] = 0,
+        [30] = '\n'
+    };
+    char* end = buff + 31;
+    if (newline) {
+        end = buff + 30;
+    }
+
+    do {
+        *--end = (num % 16) < 10 ? (num % 16) + '0' : (num % 16) - 10 + 'A';
+        num /= 16;
+    } while (num);
+    *--end = 'x';
+    *--end = '0';
+
+    UartPrintf_Puts(end);
+}
+
 // https://moker.blog/archives/_close-is-not-implemented-and-will-always-fail#:~:text=#%20include
 __attribute__((weak)) int _close(int fd)
 {

@@ -249,6 +249,10 @@ MyTimerStruct tasks[] = {
 };
 
 int main(void) {
+    NVIC_EnableIRQ(MemoryManagement_IRQn);
+    NVIC_EnableIRQ(BusFault_IRQn);
+    NVIC_EnableIRQ(UsageFault_IRQn);
+
     Systick_Init();
     UartPrintf_Init();
     Paw3205_Init();

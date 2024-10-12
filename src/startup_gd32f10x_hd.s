@@ -26,7 +26,6 @@ Reset_Handler:
 /* Call the clock system initialization function.*/
   bl  SystemInit
 
-// 牛皮，加载段还要自己写
 /* Copy the data segment initializers from flash to SRAM */
   ldr r0, =_sdata
   ldr r1, =_edata
@@ -59,7 +58,7 @@ LoopFillZerobss:
   bcc FillZerobss
 
 /* Call static constructors */
-  bl __libc_init_array
+//bl __libc_init_array
 /* Call the application's entry point.*/
   bl main
   b .
