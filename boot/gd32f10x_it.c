@@ -4,20 +4,26 @@
 #include "CMSIS/core_cm3.h"
 #include "gd32f10x_wwdgt.h"
 
-extern uint32_t _estack;
+#define CrashReport()\
+do {\
+    uint32_t* sp;\
+    asm volatile ("mrs %0, msp" : "=r" (sp));\
+    uint32_t lr;\
+    asm volatile ("mov %0, lr" : "=r" (lr));\
+    uint32_t pc;\
+    asm volatile ("mov %0, pc" : "=r" (pc));\
+    PrintStack(lr, sp, pc);\
+} while (0)
 
-static void PrintStack(void) {
-    uint32_t* sp = 0;
-    asm volatile ("mov %0, sp" : "=r" (sp));
-    uint32_t* sp_end = &_estack;
-
+static void PrintStack(uint32_t lr, uint32_t* sp, uint32_t pc) {
+    uint32_t* sp_end = (uint32_t*)(*(uint32_t*)SCB->VTOR);
     UartPrintf_Puts("Stack:\n");
     for (; sp < sp_end; ++sp) {
         UartPrintf_PrintHex((uint32_t)sp, 0);
         UartPrintf_Puts(": ");
         UartPrintf_PrintHex(*sp, 1);
     }
-    UartPrintf_Puts("stack end\n");
+    UartPrintf_Puts("End of stack\n");
 
     uint32_t val = 0;
     asm volatile ("mov %0, r0" : "=r" (val));
@@ -48,50 +54,18 @@ static void PrintStack(void) {
     asm volatile ("mov %0, r12" : "=r" (val));
     UartPrintf_Puts("R12: ");UartPrintf_PrintHex(val, 1);
 
-    asm volatile ("mov %0, r15" : "=r" (val)); // PC 通常是 r15
-    UartPrintf_Puts("PC: "); UartPrintf_PrintHex(val, 1);
-    
-    asm volatile ("mov %0, r14" : "=r" (val)); // LR
-    UartPrintf_Puts("LR: "); UartPrintf_PrintHex(val, 1);
+    UartPrintf_Puts("PC: "); UartPrintf_PrintHex(pc, 1);
+    UartPrintf_Puts("LR: "); UartPrintf_PrintHex(lr, 1);
 
     UartPrintf_Puts("End of registers\n");
     while (1);
-}
-
-void NMI_Handler(void)
-{
-    UartPrintf_Init();
-    UartPrintf_Puts("NMI_Handler\n");
-    PrintStack();
 }
 
 void HardFault_Handler(void) {
     UartPrintf_Init();
     UartPrintf_Puts("HardFault_Handler: ");
     UartPrintf_PrintHex(SCB->CFSR, 1);
-    PrintStack();
-}
-
-void MemManage_Handler(void)
-{
-    UartPrintf_Init();
-    UartPrintf_Puts("MemManage_Handler\n");
-    PrintStack();
-}
-
-void BusFault_Handler(void)
-{
-    UartPrintf_Init();
-    UartPrintf_Puts("BusFault_Handler\n");
-    PrintStack();
-}
-
-
-void UsageFault_Handler(void)
-{
-    UartPrintf_Init();
-    UartPrintf_Puts("UsageFault_Handler\n");
-    PrintStack();
+    CrashReport();
 }
 
 void SVC_Handler(void)
@@ -104,18 +78,4 @@ void DebugMon_Handler(void)
 
 void PendSV_Handler(void)
 {
-}
-
-// 外设中断
-void USBD_LP_CAN0_RX0_IRQHandler(void) {
-    usbd_isr();
-}
-
-void WWDGT_IRQHandler(void) {
-    wwdgt_counter_update(0x7f);
-    rcu_periph_clock_disable(RCU_WWDGT);
-
-    UartPrintf_Init();
-    UartPrintf_Puts("WWDGT_IRQHandler\n");
-    PrintStack();
 }

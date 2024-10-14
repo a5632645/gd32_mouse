@@ -40,7 +40,7 @@ void UartPrintf_Puts(const char* str) {
     }
 }
 
-void UartPrintf_PrintNum(int32_t num, uint8_t newline) {
+void UartPrintf_PrintNum(uint32_t num, uint8_t newline) {
     char buff[32] = {
         [31] = 0,
         [30] = '\n'
@@ -50,23 +50,15 @@ void UartPrintf_PrintNum(int32_t num, uint8_t newline) {
         end = buff + 30;
     }
 
-    int32_t t = num;
-    if (t < 0) {
-        t = -t;
-    }
-
     do {
-        *--end = (t % 10) + '0';
-        t /= 10;
-    } while (t);
-    if (num < 0) {
-        *--end = '-';
-    }
+        *--end = (num % 10) + '0';
+        num /= 10;
+    } while (num);
 
     UartPrintf_Puts(end);
 }
 
-void UartPrintf_PrintHex(int32_t num, uint8_t newline) {
+void UartPrintf_PrintHex(uint32_t num, uint8_t newline) {
     char buff[32] = {
         [31] = 0,
         [30] = '\n'
@@ -75,21 +67,13 @@ void UartPrintf_PrintHex(int32_t num, uint8_t newline) {
     if (newline) {
         end = buff + 30;
     }
-    
-    int32_t t = num;
-    if (t < 0) {
-        t = -t;
-    }
 
     do {
-        *--end = (t % 16) < 10 ? (t % 16) + '0' : (t % 16) - 10 + 'A';
-        t /= 16;
-    } while (t);
+        *--end = (num % 16) < 10 ? (num % 16) + '0' : (num % 16) - 10 + 'A';
+        num /= 16;
+    } while (num);
     *--end = 'x';
     *--end = '0';
-    if (num < 0) {
-        *--end = '-';
-    }
 
     UartPrintf_Puts(end);
 }

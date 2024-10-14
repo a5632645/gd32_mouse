@@ -8,11 +8,9 @@
 #include "leds.h"
 #include "util/my_timer.h"
 #include "util/my_button.h"
+#include "gd32f10x_wwdgt.h"
 
-// ---------------------------------------- debug ----------------------------------------
-static void UartTimer(uint32_t escape, void* userdata) {
-    printf("UartTask\n");
-}
+volatile int32_t ITM_RxBuffer;
 
 // ---------------------------------------- 按键联合 ----------------------------------------
 typedef struct {
@@ -52,22 +50,23 @@ static void UsbTimer(uint32_t escape, void* userdata) {
     gMouseReport.bits.center = ButtonMix_IsPressed(&gCenterBtnMix);
     MouseUsb_Send(&gMouseReport);
     MouseUsb_ResetReport(&gMouseReport);
+    UartPrintf_Puts("[usb] send mouse report\n");
 }
 
 // ---------------------------------------- paw3205 ----------------------------------------
-#define MY_ABS(x) ((x) < 0 ? -(x) : (x))
-#define MY_SIGNBIT(x) ((x) < 0 ? 1 : 0)
-
 static MotionStruct gMotionStruct;
 static void Paw3205Timer(uint32_t escape, void* userdata) {
-    if (!Paw3205_HasMotion())
+    if(Paw3205_GetMotion(&gMotionStruct) == 0) {
         return;
-    
-    Paw3205_GetMotion(&gMotionStruct);
-    gMouseReport.dx = MY_ABS(gMotionStruct.dx);
-    gMouseReport.dy = MY_ABS(gMotionStruct.dy);
-    gMouseReport.bits.dxSign = MY_SIGNBIT(gMotionStruct.motionStatus.dxOverflow);
-    gMouseReport.bits.dySign = MY_SIGNBIT(gMotionStruct.motionStatus.dyOverflow);
+    }
+    if (!gMotionStruct.motionStatus.motion) {
+        return;
+    }
+
+    gMouseReport.dx = gMotionStruct.dx & 0x7f;
+    gMouseReport.dy = gMotionStruct.dy & 0x7f;
+    gMouseReport.bits.dxSign = gMotionStruct.dx >> 7;
+    gMouseReport.bits.dySign = gMotionStruct.dy >> 7;
     gMouseReport.bits.dxOverflow = gMotionStruct.motionStatus.dxOverflow;
     gMouseReport.bits.dyOverflow = gMotionStruct.motionStatus.dyOverflow;
 }
@@ -139,16 +138,19 @@ static void HwTimer(uint32_t escape, void* userdata) {
             gAutoParams.autoclickLeft = !gAutoParams.autoclickLeft;
             gLeftBtnMix.autoclickEnable = gAutoParams.autoclickLeft;
             ledUpdate = TRUE;
+            UartPrintf_Puts("autoclickLeft: ");UartPrintf_PrintNum(gAutoParams.autoclickLeft, 1);
         }
         if (gButtonState.right.state == eButtonState_Click) {
             gAutoParams.autoclickRight = !gAutoParams.autoclickRight;
             gRightBtnMix.autoclickEnable = gAutoParams.autoclickRight;
             ledUpdate = TRUE;
+            UartPrintf_Puts("autoclickRight: ");UartPrintf_PrintNum(gAutoParams.autoclickRight, 1);
         }
         if (gButtonState.center.state == eButtonState_Click) {
             gAutoParams.autoclickCenter = !gAutoParams.autoclickCenter;
             gCenterBtnMix.autoclickEnable = gAutoParams.autoclickCenter;
             ledUpdate = TRUE;
+            UartPrintf_Puts("autoclickCenter: ");UartPrintf_PrintNum(gAutoParams.autoclickCenter, 1);
         }
     }
 
@@ -158,16 +160,19 @@ static void HwTimer(uint32_t escape, void* userdata) {
             gAutoParams.autopressLeft = !gAutoParams.autopressLeft;
             gLeftBtnMix.autopress_press = gAutoParams.autopressLeft;
             ledUpdate = TRUE;
+            UartPrintf_Puts("autopressLeft: ");UartPrintf_PrintNum(gAutoParams.autopressLeft, 1);
         }
         if (gButtonState.right.state == eButtonState_Click) {
             gAutoParams.autopressRight = !gAutoParams.autopressRight;
             gRightBtnMix.autopress_press = gAutoParams.autopressRight;
             ledUpdate = TRUE;
+            UartPrintf_Puts("autopressRight: ");UartPrintf_PrintNum(gAutoParams.autopressRight, 1);
         }
         if (gButtonState.center.state == eButtonState_Click) {
             gAutoParams.autopressCenter = !gAutoParams.autopressCenter;
             gCenterBtnMix.autopress_press = gAutoParams.autopressCenter;
             ledUpdate = TRUE;
+            UartPrintf_Puts("autopressCenter: ");UartPrintf_PrintNum(gAutoParams.autopressCenter, 1);
         }
     }
 
@@ -210,6 +215,7 @@ static void AutoClickTimer(uint32_t escape, void* userdata) {
     }
 }
 
+static void UartTimer(uint32_t escape, void* userdata);
 // --------------------------------------------------------------------------------
 // main
 // --------------------------------------------------------------------------------
@@ -222,22 +228,22 @@ static void Systick_Init(void);
 
 MyTimerStruct tasks[] = {
     {
-        .period = 100,
+        .period = 1000,
         .callback = UartTimer,
         .userdata = NULL,
     },
     {
-        .period = 5,
+        .period = 10,
         .callback = Paw3205Timer,
         .userdata = NULL,
     },
     {
-        .period = 10,
+        .period = 20,
         .callback = HwTimer,
         .userdata = &tasks[4],
     },
     {
-        .period = 1,
+        .period = 10,
         .callback = UsbTimer,
         .userdata = NULL,
     },
@@ -247,6 +253,12 @@ MyTimerStruct tasks[] = {
         .userdata = NULL,
     },
 };
+const uint32_t tasksLen = sizeof(tasks) / sizeof(MyTimerStruct);
+
+// ---------------------------------------- debug ----------------------------------------
+static void UartTimer(uint32_t escape, void* userdata) {
+    UartPrintf_Puts("click rate: ");UartPrintf_PrintNum(gAutoParams.autoclickRate, 1);
+}
 
 int main(void) {
     NVIC_EnableIRQ(MemoryManagement_IRQn);
@@ -254,18 +266,32 @@ int main(void) {
     NVIC_EnableIRQ(UsageFault_IRQn);
 
     Systick_Init();
+    
     UartPrintf_Init();
-    Paw3205_Init();
+
+    MY_LOG(eLogLevel_Info, "usb init\n");
     MouseUsb_Init();
+
+    MY_LOG(eLogLevel_Info, "init wwdgt\n");
+
+    MY_LOG(eLogLevel_Info, "paw3205 init\n");
+    Paw3205_Init();
+
+    MY_LOG(eLogLevel_Info, "hw timer init\n");
     MouseButton_Init();
     MouseEncoder_Init();
+
+    MY_LOG(eLogLevel_Info, "leds init\n");
     Leds_Init();
 
-    MyTimer_Reset(tasks, sizeof(tasks) / sizeof(MyTimerStruct));
+    MY_LOG(eLogLevel_Info, "start\n");
+    MyTimer_Reset(tasks, tasksLen);
+    
     for (;;) {
+        while (gTick < 1);
         uint32_t t = gTick;
         gTick = 0;
-        MyTimer_Tick(tasks, sizeof(tasks) / sizeof(MyTimerStruct), t);
+        MyTimer_Tick(tasks, tasksLen, t);
     }
 }
 

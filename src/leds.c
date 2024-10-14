@@ -30,6 +30,7 @@ void Leds_Init(void) {
     gpio_bit_reset(LED_SERIAL_GPIO, LED_SERIAL_PIN);
     gpio_bit_reset(LED_RCK_GPIO, LED_RCK_PIN);
     gpio_bit_reset(LED_SCK_GPIO, LED_SCK_PIN);
+    Led_Send(0);
 }
 
 void Leds_Set(LedEnum led, uint8_t state) {

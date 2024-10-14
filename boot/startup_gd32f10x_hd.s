@@ -17,15 +17,12 @@
 // 未初始化数据(填充0)在ram的结束位置
 .word _ebss
 
-.word _VTOR
-
   .section .text.Reset_Handler
   .weak Reset_Handler
   .type Reset_Handler, %function
 Reset_Handler:
   ldr   r0, =_estack
   mov   sp, r0          /* set stack pointer */
-
 /* Call the clock system initialization function.*/
   bl  SystemInit
 

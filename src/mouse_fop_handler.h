@@ -13,9 +13,9 @@ typedef struct {
         uint8_t dyOverflow : 1;
     } bits;
 
-    uint8_t dx;
-    uint8_t dy;
-    int8_t wheel; 
+    int8_t dx;
+    int8_t dy;
+    uint8_t wheel; 
 } MoudeReportStruct;
 
 void MouseUsb_Init(void);

@@ -112,7 +112,7 @@ usb_hid_desc_config_set hid_config_desc =
         .bEndpointAddress     = HID_IN_EP,
         .bmAttributes         = USB_EP_ATTR_INT,
         .wMaxPacketSize       = HID_IN_PACKET,
-        .bInterval            = 0x40U
+        .bInterval            = 0x8U
     }
 };
 
@@ -383,12 +383,6 @@ static uint8_t hid_req_handler (usb_dev *udev, usb_req *req)
 static void hid_data_in_handler (usb_dev *udev, uint8_t ep_num)
 {
     standard_hid_handler *hid = (standard_hid_handler *)udev->class_data[USBD_HID_INTERFACE];
-
-    if (hid->data[2]) {
-        hid->data[2] = 0x00U;
-
-        usbd_ep_send(udev, HID_IN_EP, hid->data, HID_IN_PACKET);
-    } else {
-        hid->prev_transfer_complete = 1U;
-    }
+    // 上一次已经传输完成！中断里标志置位
+    hid->prev_transfer_complete = 1U;
 }

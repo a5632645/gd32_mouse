@@ -33,6 +33,9 @@ add_compile_options(
     "-fno-exceptions"
     "-Wimplicit-function-declaration"
     "-Werror"
+    # "-fdata-sections"
+    "-ffunction-sections"
+    "-Wparentheses"
 )
 add_link_options(
     "-mcpu=cortex-m3"
@@ -52,3 +55,4 @@ project("mouse" LANGUAGES C ASM)
 
 add_subdirectory(gd_lib)
 add_subdirectory(src)
+add_subdirectory(boot)

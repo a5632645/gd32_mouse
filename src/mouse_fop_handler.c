@@ -27,14 +27,30 @@ static void HidItfDataProcess(usb_dev* udev) {
     hid_report_send(udev, hid->data, HID_IN_PACKET);
 }
 
+// USB 引脚初始化函数
+static void usb_gpio_init(void) {
+    // // 使能 GPIOA 时钟（根据具体的引脚调整）
+    // rcu_periph_clock_enable(RCU_GPIOA);
+    // rcu_periph_clock_enable(RCU_AF);
+
+    // // 配置 PA11 为 USB DM
+    // gpio_init(GPIOA, GPIO_MODE_AF_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_11);
+    
+    // // 配置 PA12 为 USB DP
+    // gpio_init(GPIOA, GPIO_MODE_AF_PP, GPIO_OSPEED_50MHZ, GPIO_PIN_12);
+}
+
 void MouseUsb_Init(void) {
-    rcu_periph_clock_enable(RCU_USBD);
     rcu_usb_clock_config(RCU_CKUSB_CKPLL_DIV2);
+    rcu_periph_clock_enable(RCU_USBD);
+
+    usb_gpio_init();
 
     hid_itfop_register(&usb_hid, &gMouseFopHandler);
     usbd_init(&usb_hid, &hid_desc, &hid_class);
 
-    nvic_irq_enable(USBD_LP_CAN0_RX0_IRQn, 0, 0);
+    nvic_irq_enable(USBD_LP_CAN0_RX0_IRQn, 1, 0);
+    nvic_irq_enable((uint8_t)USBD_WKUP_IRQn, 0U, 0U);
 
     usbd_connect(&usb_hid);
     while(usb_hid.cur_status != USBD_CONFIGURED) {

@@ -6,14 +6,15 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 MEMORY
 {
     /* 定义内存区域 */
-    FLASH (rx)   : ORIGIN = 0x08000000, LENGTH = 64K  /* Flash memory */
+    FLASH (rx)   : ORIGIN = 0x08000000, LENGTH = 8K  /* Flash memory */
     RAM (rw)     : ORIGIN = 0x20000000, LENGTH = 20K   /* SRAM memory */
 }
 
 /* 定义段 */
 SECTIONS
 {
-    _VTOR = ORIGIN(FLASH);
+    _app_start = ORIGIN(FLASH) + LENGTH(FLASH);
+
     /* 代码 */
     .text : {
         KEEP(*(.isr_vector))   /* 保留中断向量表 */

@@ -1,6 +1,7 @@
 #include "paw3205.h"
 #include "gd32f10x_gpio.h"
 #include "delay.h"
+#include "uart_printf.h"
 
 #define SENSOR_GPIO GPIOB
 #define SCLK_PIN GPIO_PIN_8
@@ -35,18 +36,22 @@ static void Paw3205Sync(void);
 static void Paw3205Init(void) {
     Delay_Init();
 
+    MY_LOG_INFO("paw3205 gpio init\n");
     rcu_periph_clock_enable(RCU_GPIOB);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SCLK_PIN);
     gpio_init(SENSOR_GPIO, GPIO_MODE_OUT_PP, GPIO_OSPEED_50MHZ, SDIO_PIN);
-    gpio_init(SENSOR_GPIO, GPIO_MODE_IN_FLOATING, GPIO_OSPEED_50MHZ, MOTION_PIN);
+    gpio_init(SENSOR_GPIO, GPIO_MODE_IPU, GPIO_OSPEED_50MHZ, MOTION_PIN);
     gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
     gpio_bit_set(SENSOR_GPIO, SDIO_PIN);
 
     Delay_Ms(50);
+    MY_LOG_INFO("paw3205 try sync\n");
     Paw3205_TrySync();
+    MY_LOG_INFO("paw3205 reset\n");
     Paw3205_ResetChip();
     Delay_Ms(5);
 
+    MY_LOG_INFO("paw3205 init\n");
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x5a);	//Unlock WP
     Paw3205WriteReg(0x28, 0xb4);
     Paw3205WriteReg(0x29, 0x46);
@@ -83,6 +88,8 @@ static void Paw3205Init(void) {
 
     for (uint8_t addr = 0x2; addr < 0x7; addr++)
         Paw3205ReadReg(addr);
+    
+    MY_LOG_INFO("paw3205 init done\n");
 }
 
 typedef struct {
@@ -91,9 +98,11 @@ typedef struct {
     uint32_t ctrl : 2;
     uint32_t : 24;
 } GpioCtrlStruct;
+#define SENSOR_CTRL ((volatile GpioCtrlStruct*)(&(GPIO_CTL1(SENSOR_GPIO))))
+
 static void Paw3205Write(uint8_t data) {
-    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->md = 0b11;
-    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->ctrl = 0b00;
+    SENSOR_CTRL->md = 0b11;
+    SENSOR_CTRL->ctrl = 0b00;
     for (int i = 0; i < 8; i++) {
         gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
         if (data & 0x80) {
@@ -107,17 +116,20 @@ static void Paw3205Write(uint8_t data) {
 }
 
 static uint8_t Paw3205Read(void) {
-    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->md = 0b00;
-    ((volatile GpioCtrlStruct*)GPIO_CTL1(SENSOR_GPIO))->ctrl = 0b01;
+    SENSOR_CTRL->md = 0b00;
+    SENSOR_CTRL->ctrl = 0b01;
+    Delay_Us(5);
     uint8_t data = 0;
     for (int i = 0; i < 8; i++) {
-        gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
         gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
+        data <<= 1;
+        gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
         if (SET == gpio_input_bit_get(SENSOR_GPIO, SDIO_PIN)) {
             data |= 0x01;
         }
-        data <<= 1;
     }
+    SENSOR_CTRL->md = 0b11;
+    SENSOR_CTRL->ctrl = 0b00;
     return data;
 }
 
@@ -129,6 +141,11 @@ static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data) {
     } while (Paw3205ReadReg(address) == data && (tries--));
 
     if (tries == 0) {
+        UartPrintf_Puts("Paw3205 write error\n");
+        UartPrintf_Puts("[");
+        UartPrintf_PrintHex(address, 0);
+        UartPrintf_Puts("] ");
+        UartPrintf_PrintHex(data, 1);
         return FALSE;
     }
     else {
@@ -138,15 +155,13 @@ static bool Paw3205WriteReg(Paw3205AddressEnum address, uint8_t data) {
 
 static uint8_t Paw3205ReadReg(Paw3205AddressEnum address) {
     Paw3205Write(0x7f & address);
-    Delay_Us(3);
     uint8_t data = Paw3205Read();
-    Delay_Us(1);
     return data;
 }
 
 static void Paw3205Sync(void) {
     gpio_bit_reset(SENSOR_GPIO, SCLK_PIN);
-    Delay_Us(1);
+    Delay_Us(2);
     gpio_bit_set(SENSOR_GPIO, SCLK_PIN);
     Delay_Us(1700);
 }
@@ -158,28 +173,44 @@ void Paw3205_Init(void) {
     Paw3205Init();
 }
 
-void Paw3205_GetMotion(MotionStruct* motion) {
-    Paw3205_TrySync();
+int8_t Paw3205_NumConvert(uint8_t code) {
+    if (code & 0x80) {
+        // negative
+        --code;
+        code = (~code) & 0x7f;
+        return -code;
+    }
+    else {
+        // positive
+        return code;
+    }
+}
+
+
+uint8_t Paw3205_GetMotion(MotionStruct* motion) {
+    uint8_t sync = Paw3205_TrySync();
     motion->dx = Paw3205ReadReg(ePaw3205_DeltaX);
     motion->dy = Paw3205ReadReg(ePaw3205_DeltaY);
     *(uint8_t*)&motion->motionStatus = Paw3205ReadReg(ePaw3205_Motion);
+    return sync;
 }
 
 uint8_t Paw3205_TrySync(void) {
-    uint32_t trys = 16;
+    uint32_t trys = 32;
     uint16_t id = Paw3205ReadReg(ePAW3205_ProductID0);
-    if (id == 0x30) {
+
+    if ((id & 0x30) == 0x30) {
         return 1;
     }
-
     while (trys--) {
         Paw3205Sync();
         id = Paw3205ReadReg(ePAW3205_ProductID0);
-        if (id == 0x30) {
-            return 0;
+        if ((id & 0x30) == 0x30) {
+            return 1;
         }
     }
-    return FALSE;
+    Paw3205_ResetChip();
+    return 0;
 }
 
 typedef struct {
@@ -209,4 +240,34 @@ void Paw3205_SetCPI(Paw3205CPIEnum cpi) {
     ((Paw3205ConfigRegStruct*)&val)->cpi = cpi;
     Paw3205WriteReg(ePaw3205_Config, val);
     Paw3205WriteReg(ePaw3205_WriteProtect, 0x00);	//Lock WP
+}
+
+void Paw3205_DumpReg(void) {
+    UartPrintf_Puts("Paw3205 dump:\n");
+    uint8_t d = 0;
+    d = Paw3205ReadReg(ePAW3205_ProductID0);
+    UartPrintf_Puts("pid0:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePAW3205_ProductID1);
+    UartPrintf_Puts("pid1:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_Motion);
+    UartPrintf_Puts("mot:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_DeltaX);
+    UartPrintf_Puts("dx:");UartPrintf_PrintNum((int8_t)d, 1);
+    d = Paw3205ReadReg(ePaw3205_DeltaY);
+    UartPrintf_Puts("dy:");UartPrintf_PrintNum((int8_t)d, 1);
+    d = Paw3205ReadReg(ePaw3205_OpMode);
+    UartPrintf_Puts("op:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_Config);
+    UartPrintf_Puts("config:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_ImgQuality);
+    UartPrintf_Puts("iq:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_OpState);
+    UartPrintf_Puts("os:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_WriteProtect);
+    UartPrintf_Puts("wp:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_SleepSetting1);
+    UartPrintf_Puts("s1:");UartPrintf_PrintNum(d, 1);
+    d = Paw3205ReadReg(ePaw3205_SleepSetting2);
+    UartPrintf_Puts("s2:");UartPrintf_PrintNum(d, 1);
+    UartPrintf_Puts("\n");
 }

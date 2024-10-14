@@ -23,7 +23,7 @@ void MouseEncoder_Init(void) {
     timer_deinit(CLICK_RATE_ENCODER);
 
     timer_parameter_struct initStruct = {
-        .prescaler = 0,
+        .prescaler = 4,
         .alignedmode = TIMER_COUNTER_EDGE,
         .clockdivision = TIMER_CKDIV_DIV1,
         .counterdirection = TIMER_COUNTER_UP,
@@ -31,6 +31,7 @@ void MouseEncoder_Init(void) {
         .period = 65535
     };
     timer_init(WHEEL_ENCODER, &initStruct);
+    initStruct.period = 8;
     timer_init(CLICK_RATE_ENCODER, &initStruct);
 
     timer_quadrature_decoder_mode_config(WHEEL_ENCODER, TIMER_QUAD_DECODER_MODE2, TIMER_IC_POLARITY_RISING, TIMER_IC_POLARITY_RISING);
@@ -43,10 +44,10 @@ void MouseEncoder_Init(void) {
     timer_counter_value_config(CLICK_RATE_ENCODER, 32768);
 
     // ic滤波
-    ((volatile TimerChCfg1Struct*)WHEEL_ENCODER)->ch0Filt = 0b0011;
-    ((volatile TimerChCfg1Struct*)WHEEL_ENCODER)->ch1Filt = 0b0011;
-    ((volatile TimerChCfg1Struct*)CLICK_RATE_ENCODER)->ch0Filt = 0b0011;
-    ((volatile TimerChCfg1Struct*)CLICK_RATE_ENCODER)->ch1Filt = 0b0011;
+    ((volatile TimerChCfg1Struct*)WHEEL_ENCODER)->ch0Filt = 0b1111;
+    ((volatile TimerChCfg1Struct*)WHEEL_ENCODER)->ch1Filt = 0b1111;
+    ((volatile TimerChCfg1Struct*)CLICK_RATE_ENCODER)->ch0Filt = 0b1111;
+    ((volatile TimerChCfg1Struct*)CLICK_RATE_ENCODER)->ch1Filt = 0b1111;
 
     rcu_periph_clock_enable(RCU_GPIOA);
     rcu_periph_clock_enable(RCU_AF);

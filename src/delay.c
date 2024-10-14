@@ -21,8 +21,8 @@ void Delay_Init(void) {
 
 void Delay_Ms(uint32_t ms) {
     timer_disable(DELAY_TIMER);
-    timer_prescaler_config(DELAY_TIMER, TIMER_CLK_HZ / 2000 - 1, TIMER_PSC_RELOAD_NOW);
-    timer_autoreload_value_config(DELAY_TIMER, ms * 2 - 1);
+    timer_prescaler_config(DELAY_TIMER, ms * 2 - 1, TIMER_PSC_RELOAD_NOW);
+    timer_autoreload_value_config(DELAY_TIMER, TIMER_CLK_HZ / 2000 - 1);
     timer_counter_value_config(DELAY_TIMER, 0);
     timer_flag_clear(DELAY_TIMER, TIMER_FLAG_UP);
     timer_enable(DELAY_TIMER);
@@ -31,8 +31,8 @@ void Delay_Ms(uint32_t ms) {
 
 void Delay_Us(uint32_t us) {
     timer_disable(DELAY_TIMER);
-    timer_prescaler_config(DELAY_TIMER, TIMER_CLK_HZ / 1000000 - 1, TIMER_PSC_RELOAD_NOW);
-    timer_autoreload_value_config(DELAY_TIMER, us - 1);
+    timer_prescaler_config(DELAY_TIMER, us - 1, TIMER_PSC_RELOAD_NOW);
+    timer_autoreload_value_config(DELAY_TIMER, TIMER_CLK_HZ / 1000000 - 1);
     timer_counter_value_config(DELAY_TIMER, 0);
     timer_flag_clear(DELAY_TIMER, TIMER_FLAG_UP);
     timer_enable(DELAY_TIMER);
