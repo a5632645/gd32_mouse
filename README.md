@@ -1,3 +1,6 @@
+>not usable  
+- [ ] usb not working
+
 # homemade usb hid mouse  
 mcu: gd32f103c8t6  
 sensor: paw3205db-tj3t  
